@@ -10,18 +10,31 @@ type Product = {
 
 type SearchResponse = {
   message: string;
-  query_image: string;
-  total_results: number;
   results: Product[];
+  total_results: number;
 };
 
+type SearchMode = "image" | "text";
+
+const API_URL = "http://127.0.0.1:8000";
+
 export default function Home() {
+  const [mode, setMode] = useState<SearchMode>("image");
   const [image, setImage] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+
+  function changeMode(newMode: SearchMode) {
+    if (loading) return;
+    setMode(newMode);
+    setResults([]);
+    setError("");
+    setSearched(false);
+  }
 
   function handleImageChange(
     event: ChangeEvent<HTMLInputElement>
@@ -30,15 +43,15 @@ export default function Home() {
 
     if (!selectedFile) return;
 
-    if (
-      !["image/jpeg", "image/png"].includes(selectedFile.type)
-    ) {
+    if (!["image/jpeg", "image/png"].includes(selectedFile.type)) {
       setError("Please select a JPG or PNG image.");
+      event.target.value = "";
       return;
     }
 
     if (selectedFile.size > 5 * 1024 * 1024) {
       setError("Image must be 5 MB or smaller.");
+      event.target.value = "";
       return;
     }
 
@@ -57,8 +70,15 @@ export default function Home() {
   }
 
   async function handleSearch() {
-    if (!file) {
+    if (loading) return;
+
+    if (mode === "image" && !file) {
       setError("Please upload an image first.");
+      return;
+    }
+
+    if (mode === "text" && !query.trim()) {
+      setError("Please enter a product description.");
       return;
     }
 
@@ -68,22 +88,35 @@ export default function Home() {
     setSearched(false);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      let response: Response;
 
-      const response = await fetch(
-        "http://127.0.0.1:8000/search-image",
-        {
+      if (mode === "image") {
+        const formData = new FormData();
+        formData.append("file", file!);
+
+        response = await fetch(`${API_URL}/search-image`, {
           method: "POST",
           body: formData,
-        }
-      );
+        });
+      } else {
+        response = await fetch(`${API_URL}/search-text`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: query.trim(),
+          }),
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
 
         throw new Error(
-          errorData?.detail || "AI search failed."
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "AI search failed. Please try again."
         );
       }
 
@@ -91,12 +124,13 @@ export default function Home() {
 
       setResults(data.results);
       setSearched(true);
-
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to connect to the AI backend."
+        err instanceof TypeError
+          ? "Cannot connect to the AI backend. Check FastAPI."
+          : err instanceof Error
+            ? err.message
+            : "Something went wrong."
       );
     } finally {
       setLoading(false);
@@ -105,94 +139,179 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-
+      {/* Header */}
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
           <h1 className="text-2xl font-bold text-indigo-600">
             VisionSearch AI
           </h1>
 
-          <span className="text-sm text-slate-500">
+          <p className="text-right text-sm text-slate-500">
             AI-Powered Product Discovery
-          </span>
+          </p>
         </div>
       </header>
 
-      <section className="mx-auto max-w-5xl px-6 py-16 text-center">
-
+      {/* Main Section */}
+      <section className="mx-auto max-w-6xl px-6 py-16 text-center">
         <span className="rounded-full bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700">
           Powered by CLIP AI
         </span>
 
-        <h2 className="mt-8 text-4xl font-bold md:text-6xl">
+        <h2 className="mt-8 text-4xl font-bold tracking-tight md:text-6xl">
           Discover Products{" "}
-          <span className="text-indigo-600">
-            Visually
-          </span>
+          <span className="text-indigo-600">Visually</span>
         </h2>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
-          Upload an image and discover similar products
-          using Artificial Intelligence.
+          Search for similar products using an image or a
+          natural language description.
         </p>
 
-        <div className="mx-auto mt-12 max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+        {/* Search Card */}
+        <div className="mx-auto mt-12 max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
 
-          <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-8">
+          {/* Search Mode Tabs */}
+          <div className="mb-8 grid grid-cols-2 gap-3 rounded-xl bg-slate-100 p-2">
+            <button
+              type="button"
+              onClick={() => changeMode("image")}
+              disabled={loading}
+              aria-pressed={mode === "image"}
+              className={`rounded-lg px-4 py-3 font-semibold transition ${
+                mode === "image"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-slate-600 hover:bg-white"
+              }`}
+            >
+              📷 Search by Image
+            </button>
 
-            {image ? (
-              <img
-                src={image}
-                alt="Uploaded product preview"
-                className="mx-auto max-h-64 rounded-xl object-contain"
+            <button
+              type="button"
+              onClick={() => changeMode("text")}
+              disabled={loading}
+              aria-pressed={mode === "text"}
+              className={`rounded-lg px-4 py-3 font-semibold transition ${
+                mode === "text"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-slate-600 hover:bg-white"
+              }`}
+            >
+              🔎 Search by Text
+            </button>
+          </div>
+
+          {/* Image Search */}
+          {mode === "image" && (
+            <div>
+              <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-8 transition hover:border-indigo-500">
+                {image ? (
+                  <div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={image}
+                      alt="Selected product"
+                      className="mx-auto max-h-64 rounded-xl object-contain"
+                    />
+
+                    <p className="mt-4 text-sm text-indigo-600">
+                      Click to change image
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-5xl">📸</div>
+
+                    <h3 className="mt-4 text-xl font-semibold">
+                      Upload Product Image
+                    </h3>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                      Click to select a JPG or PNG image
+                    </p>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleImageChange}
+                  disabled={loading}
+                  className="hidden"
+                />
+              </label>
+
+              <p className="mt-4 text-xs text-slate-400">
+                Maximum image size: 5 MB
+              </p>
+            </div>
+          )}
+
+          {/* Text Search */}
+          {mode === "text" && (
+            <div className="text-left">
+              <label
+                htmlFor="product-query"
+                className="mb-3 block text-sm font-semibold text-slate-700"
+              >
+                Describe the product you want to find
+              </label>
+
+              <input
+                id="product-query"
+                type="text"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setResults([]);
+                  setSearched(false);
+                  setError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
+                maxLength={200}
+                placeholder="e.g. black leather shoes"
+                disabled={loading}
+                className="w-full rounded-xl border border-slate-300 bg-white px-5 py-4 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
-            ) : (
-              <div>
-                <div className="text-5xl">📸</div>
 
-                <h3 className="mt-4 text-xl font-semibold">
-                  Upload Product Image
-                </h3>
+              <p className="mt-3 text-sm text-slate-500">
+                Try: white sneakers, leather handbag, wristwatch
+              </p>
+            </div>
+          )}
 
-                <p className="mt-2 text-sm text-slate-500">
-                  Click to select a JPG or PNG image
-                </p>
-              </div>
-            )}
-
-            <input
-              type="file"
-              accept="image/jpeg,image/png"
-              onChange={handleImageChange}
-              className="hidden"
-            />
-          </label>
-
+          {/* Search Button */}
           <button
+            type="button"
             onClick={handleSearch}
             disabled={loading}
-            className="mt-6 w-full rounded-xl bg-indigo-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            className="mt-7 w-full rounded-xl bg-indigo-600 px-6 py-4 text-lg font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "AI is searching..."
-              : "Search Similar Products"}
+              : mode === "image"
+                ? "Search Similar Products"
+                : "Search Products by Text"}
           </button>
 
-          <p className="mt-4 text-xs text-slate-400">
-            Maximum image size: 5 MB
-          </p>
-
           {error && (
-            <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+            <p
+              role="alert"
+              className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-600"
+            >
               {error}
             </p>
           )}
-
         </div>
 
+        {/* Search Results */}
         {searched && (
-          <div className="mt-16">
-
+          <section className="mt-16" aria-live="polite">
             <h3 className="text-3xl font-bold">
               AI Search Results
             </h3>
@@ -201,57 +320,53 @@ export default function Home() {
               Found {results.length} similar products
             </p>
 
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {results.length === 0 ? (
+              <p className="mt-8 text-slate-500">
+                No matching products found.
+              </p>
+            ) : (
+              <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {results.map((product, index) => (
+                  <article
+                    key={product.filename}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-lg"
+                  >
+                    <div className="flex h-56 items-center justify-center overflow-hidden rounded-xl bg-slate-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`${API_URL}/products/${encodeURIComponent(product.filename)}`}
+                        alt={product.filename}
+                        className="h-full w-full object-contain"
+                        loading="lazy"
+                      />
+                    </div>
 
-              {results.map((product, index) => (
-                <div
-                  key={product.filename}
-                  className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                >
-                 
-<div className="mb-4 flex h-48 items-center justify-center overflow-hidden rounded-xl bg-slate-50">
-  {/* Product photos are served by our FastAPI backend */}
-  {/* eslint-disable-next-line @next/next/no-img-element */}
-  <img
-    src={`http://127.0.0.1:8000/products/${encodeURIComponent(
-      product.filename
-    )}`}
-    alt={product.filename}
-    className="h-full w-full object-contain"
-    loading="lazy"
-  />
-</div>
+                    <p className="mt-5 text-sm font-medium text-indigo-600">
+                      Match #{index + 1}
+                    </p>
 
+                    <h4 className="mt-2 break-words text-lg font-semibold">
+                      {product.filename.replace(/\.[^.]+$/, "").replace(/_/g, " ")}
+                    </h4>
 
-                  <p className="text-sm font-medium text-indigo-600">
-                    Match #{index + 1}
-                  </p>
+                    <p className="mt-4 text-sm text-slate-500">
+                      Cosine Similarity
+                    </p>
 
-                  <h4 className="mt-2 break-words text-lg font-semibold">
-                    {product.filename}
-                  </h4>
-
-                  <p className="mt-4 text-sm text-slate-500">
-                    Cosine Similarity
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-indigo-600">
-                    {product.similarity.toFixed(4)}
-                  </p>
-
-                </div>
-              ))}
-
-            </div>
-          </div>
+                    <p className="mt-1 text-2xl font-bold text-indigo-600">
+                      {product.similarity.toFixed(4)}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         )}
-
       </section>
 
       <footer className="border-t border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
         VisionSearch AI — Intelligent Product Discovery
       </footer>
-
     </main>
   );
 }

@@ -4,7 +4,10 @@ from io import BytesIO
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from PIL import Image, UnidentifiedImageError
 
-from search_service import search_similar_products
+from search_service import (
+    search_similar_products,
+    search_products_by_text
+)
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
@@ -130,3 +133,33 @@ async def search_image(file: UploadFile = File(...)):
             status_code=400,
             detail="Unable to process image"
         )
+
+
+from pydantic import BaseModel, Field
+
+
+class TextSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/search-text")
+def search_text(request: TextSearchRequest):
+
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty"
+        )
+
+    results = search_products_by_text(
+        query=request.query,
+        top_k=5
+    )
+
+    return {
+        "message": "AI text search completed",
+        "query": request.query,
+        "total_results": len(results),
+        "results": results
+    }
+
