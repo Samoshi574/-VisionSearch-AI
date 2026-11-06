@@ -1,0 +1,40 @@
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# AI Model Files
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Local Datasets
+data/products/
+data/test_shoe.png
+data/raw/
+data/processed/
+
+# Generated Files
+visual_results.html
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
