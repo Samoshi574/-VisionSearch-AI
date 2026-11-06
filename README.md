@@ -19,6 +19,28 @@ The system uses a pretrained CLIP model to generate image embeddings and cosine 
 - REST API integration
 - Image validation and file size restrictions
 
+
+## Project Screenshots
+
+### 1. Homepage
+
+VisionSearch AI provides a simple and responsive interface for uploading product images.
+
+![VisionSearch AI Homepage](screenshots/homepage.png)
+
+### 2. AI Image Search Results
+
+The application uses CLIP embeddings and cosine similarity to retrieve visually similar products.
+
+![AI Search Results](screenshots/search-results.png)
+
+### 3. FastAPI Documentation
+
+The backend provides REST API endpoints for image uploads and AI-powered product search.
+
+![FastAPI API Documentation](screenshots/api-docs.png)
+
+
 ## Technology Stack
 
 **Frontend**
