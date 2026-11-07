@@ -16,7 +16,9 @@ type SearchResponse = {
 
 type SearchMode = "image" | "text";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8000";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 function getErrorMessage(error: unknown): string {
