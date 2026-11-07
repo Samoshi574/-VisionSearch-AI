@@ -1,27 +1,52 @@
 
+import html
 import subprocess
 import sys
-import re
-import html
 from pathlib import Path
+
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "ml" / "image_search.py"
 PRODUCTS = ROOT / "data" / "products"
 OUTPUT = ROOT / "visual_results.html"
 
-# Run similarity search
+
+# Run image similarity search
 result = subprocess.run(
     [sys.executable, str(SCRIPT)],
     capture_output=True,
     text=True,
-    check=True
+    check=True,
 )
 
-# Read matching product results
-pattern = r"^\d+\.\s+(.+?)\s+- Similarity:\s+(-?\d+\.\d+)$"
-matches = re.findall(pattern, result.stdout, re.MULTILINE)
 
+
+# Extract matching products without regular expressions
+matches = []
+
+for line in result.stdout.splitlines():
+    rank, separator, remainder = line.partition(". ")
+
+    if not separator or not rank.isdecimal():
+        continue
+
+    filename, separator, score = remainder.rpartition(
+        " - Similarity: "
+    )
+
+    if not separator or not filename.strip():
+        continue
+
+    try:
+        float(score)
+    except ValueError:
+        continue
+
+    matches.append((filename.strip(), score.strip()))
+
+
+
+# Build HTML result cards
 cards = []
 
 for filename, score in matches:
@@ -32,19 +57,27 @@ for filename, score in matches:
 
     image_url = image_path.resolve().as_uri()
 
-    cards.append(f"""
-    <div class="card">
-        <img src="{html.escape(image_url, quote=True)}">
-        <h3>{html.escape(filename)}</h3>
-        <p>Similarity: {float(score):.4f}</p>
-    </div>
-    """)
+    cards.append(
+        f"""
+        <div class="card">
+            <img
+                src="{html.escape(image_url, quote=True)}"
+                alt="{html.escape(filename, quote=True)}"
+            >
+            <h3>{html.escape(filename)}</h3>
+            <p>Similarity: {float(score):.4f}</p>
+        </div>
+        """
+    )
 
+
+# Generate HTML page
 page = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VisionSearch AI Results</title>
 <style>
 body {
@@ -73,7 +106,10 @@ img {
     height: 170px;
     object-fit: contain;
 }
-p { color: #2563eb; font-weight: bold; }
+p {
+    color: #2563eb;
+    font-weight: bold;
+}
 </style>
 </head>
 <body>
@@ -85,6 +121,7 @@ p { color: #2563eb; font-weight: bold; }
 </body>
 </html>
 """
+
 
 OUTPUT.write_text(page, encoding="utf-8")
 

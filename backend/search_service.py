@@ -1,11 +1,12 @@
 
-from pathlib import Path
 from io import BytesIO
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 from transformers import CLIPModel, CLIPProcessor
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PRODUCTS_FOLDER = PROJECT_ROOT / "data" / "products"
@@ -22,6 +23,7 @@ def load_search_model():
 
     if model is None:
         print("Loading CLIP model...")
+
         model = CLIPModel.from_pretrained(MODEL_NAME)
         processor = CLIPProcessor.from_pretrained(MODEL_NAME)
         model.eval()
@@ -34,7 +36,7 @@ def get_embedding(image):
 
     inputs = current_processor(
         images=image,
-        return_tensors="pt"
+        return_tensors="pt",
     )
 
     with torch.inference_mode():
@@ -52,7 +54,9 @@ def build_product_index():
     product_index = []
 
     if not PRODUCTS_FOLDER.is_dir():
-        raise FileNotFoundError("Products folder does not exist.")
+        raise FileNotFoundError(
+            "Products folder does not exist."
+        )
 
     for path in sorted(PRODUCTS_FOLDER.iterdir()):
         if path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
@@ -66,10 +70,10 @@ def build_product_index():
 
             product_index.append({
                 "filename": path.name,
-                "embedding": embedding
+                "embedding": embedding,
             })
 
-        except (UnidentifiedImageError, OSError):
+        except OSError:
             print(f"Skipping invalid image: {path.name}")
 
     print(f"Indexed {len(product_index)} products.")
@@ -93,17 +97,17 @@ def search_similar_products(image_bytes, top_k=5):
         score = F.cosine_similarity(
             query_embedding,
             product["embedding"],
-            dim=-1
+            dim=-1,
         ).item()
 
         results.append({
             "filename": product["filename"],
-            "similarity": round(score, 4)
+            "similarity": round(score, 4),
         })
 
     results.sort(
         key=lambda item: item["similarity"],
-        reverse=True
+        reverse=True,
     )
 
     return results[:top_k]
@@ -129,7 +133,7 @@ def search_products_by_text(query: str, top_k: int = 5):
         text=[query],
         return_tensors="pt",
         padding=True,
-        truncation=True
+        truncation=True,
     )
 
     with torch.inference_mode():
@@ -141,7 +145,7 @@ def search_products_by_text(query: str, top_k: int = 5):
     text_embedding = F.normalize(
         text_embedding,
         p=2,
-        dim=-1
+        dim=-1,
     )
 
     results = []
@@ -150,18 +154,17 @@ def search_products_by_text(query: str, top_k: int = 5):
         similarity = F.cosine_similarity(
             text_embedding,
             product["embedding"],
-            dim=-1
+            dim=-1,
         ).item()
 
         results.append({
             "filename": product["filename"],
-            "similarity": round(similarity, 4)
+            "similarity": round(similarity, 4),
         })
 
     results.sort(
         key=lambda item: item["similarity"],
-        reverse=True
+        reverse=True,
     )
 
     return results[:top_k]
-
